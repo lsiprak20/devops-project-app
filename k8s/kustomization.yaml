@@ -1,0 +1,17 @@
+# Omogucuje deploy svega jednom naredbom: kubectl apply -k k8s/
+# Autor: Lovro Siprak
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ticketing
+resources:
+  - 00-namespace.yaml
+  - 01-rbac.yaml
+  - 02-configmap.yaml
+  - 03-secret.yaml
+  - 04-postgres.yaml
+  - 05-redis.yaml
+  - 06-api.yaml
+  - 07-worker.yaml
+  - 08-frontend.yaml
+  - 09-ingress.yaml
+  - 10-networkpolicy.yaml

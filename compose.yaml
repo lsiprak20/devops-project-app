@@ -1,0 +1,141 @@
+# =============================================================================
+# Secure Event Ticketing Platform - LOKALNI RAZVOJ (1. dio projekta)
+# Autor: Lovro Siprak
+# -----------------------------------------------------------------------------
+# Pokrece cijeli stack jednom naredbom:
+#     docker compose up --build          (Docker)
+#     podman compose up --build          (Podman)
+#
+# Servisi: frontend, api, worker, postgres, redis
+# Hot-reload: api/frontend/worker se grade iz "dev" target-a (nodemon) i izvor
+# se mounta kao volume, pa se promjene koda odmah primijene bez ponovnog builda.
+# =============================================================================
+
+name: ticketing-local
+
+services:
+  # ---------------------------------------------------------------- PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # Perzistencija podataka baze (zahtjev 1. dijela: podaci prezive restart)
+      - postgres_data:/var/lib/postgresql/data
+      # init.sql se izvrsi SAMO pri prvom kreiranju prazne baze -> kreira tablice
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+  # --------------------------------------------------------------------- Redis
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+  # ----------------------------------------------------------------------- API
+  api:
+    build:
+      context: ./api
+      target: dev            # hot-reload verzija (nodemon)
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      API_PORT: ${API_PORT}
+      QUEUE_NAME: ${QUEUE_NAME}
+      NODE_ENV: ${NODE_ENV}
+    ports:
+      - "${API_PORT}:8080"   # API dostupan na http://localhost:8080
+    volumes:
+      - ./api/src:/app/src   # mount izvora -> hot-reload (node_modules ostaje iz slike)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [backend]
+
+  # -------------------------------------------------------------------- Worker
+  worker:
+    build:
+      context: ./worker
+      target: dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      QUEUE_NAME: ${QUEUE_NAME}
+      NODE_ENV: ${NODE_ENV}
+    volumes:
+      - ./worker/src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [backend]
+
+  # ------------------------------------------------------------------ Frontend
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    restart: unless-stopped
+    environment:
+      FRONTEND_PORT: ${FRONTEND_PORT}
+      # Browser korisnika zove API preko host porta, ne preko docker mreze:
+      API_BASE_URL: ${API_BASE_URL}
+      NODE_ENV: ${NODE_ENV}
+    ports:
+      - "${FRONTEND_PORT}:3000"   # UI dostupan na http://localhost:3000
+    volumes:
+      - ./frontend/src:/app/src
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [backend]
+
+# Imenovani volume -> podaci PostgreSQL-a prezive "compose down" (ali ne "down -v")
+volumes:
+  postgres_data:
+
+# Zasebna mreza za sve servise (osnovna izolacija)
+networks:
+  backend:
+    driver: bridge

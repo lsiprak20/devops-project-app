@@ -1,0 +1,10 @@
+# Namespace = logicka izolacija svih resursa ove aplikacije
+# Autor: Lovro Siprak
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ticketing
+  labels:
+    app.kubernetes.io/part-of: secure-event-ticketing
+    pod-security.kubernetes.io/enforce: restricted   # Pod Security Standard: restricted
+    pod-security.kubernetes.io/warn: restricted

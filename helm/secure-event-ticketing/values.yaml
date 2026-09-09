@@ -1,0 +1,59 @@
+# =============================================================================
+# Helm values - centralna konfiguracija. Override preko: helm install -f my.yaml
+# Autor: Lovro Siprak
+# =============================================================================
+
+# Globalni registry/owner za sve slike. ZAMIJENI "owner".
+image:
+  registry: ghcr.io
+  owner: OWNER            # <-- promijeni u svoj GitHub username
+  tag: "1.0.0"           # tag slika (verzija); preporuka: koristi git SHA u CI-u
+  pullPolicy: IfNotPresent
+
+# Tajne (u produkciji override-aj ili koristi External Secrets / Sealed Secrets)
+secret:
+  postgresUser: ticketing_user
+  postgresPassword: "ChangeMe_Prod_2026!"
+
+config:
+  postgresDb: ticketing
+  queueName: ticket_orders
+  nodeEnv: production
+  apiBaseUrl: "http://ticketing.local/api"
+
+postgres:
+  storage: 1Gi
+  resources:
+    requests: { cpu: "100m", memory: "128Mi" }
+    limits:   { cpu: "500m", memory: "256Mi" }
+
+redis:
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits:   { cpu: "250m", memory: "128Mi" }
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits:   { cpu: "300m", memory: "192Mi" }
+
+worker:
+  replicas: 1
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits:   { cpu: "250m", memory: "128Mi" }
+
+frontend:
+  replicas: 2
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits:   { cpu: "250m", memory: "128Mi" }
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ticketing.local
+
+networkPolicy:
+  enabled: true

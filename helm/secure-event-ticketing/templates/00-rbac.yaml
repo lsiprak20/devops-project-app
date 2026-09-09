@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ticketing-sa
+  labels:
+    {{- include "ticketing.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ticketing-config-reader
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get","list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ticketing-config-reader-binding
+subjects:
+  - kind: ServiceAccount
+    name: ticketing-sa
+roleRef:
+  kind: Role
+  name: ticketing-config-reader
+  apiGroup: rbac.authorization.k8s.io

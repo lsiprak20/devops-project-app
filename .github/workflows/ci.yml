@@ -1,0 +1,153 @@
+# =============================================================================
+# CI/CD pipeline - Secure Event Ticketing Platform
+# Autor: Lovro Siprak
+# -----------------------------------------------------------------------------
+# Tok (I3 ubrzana isporuka + I4 DevSecOps):
+#   1) lint+test   - provjera koda za sva 3 servisa (matrica)
+#   2) build       - gradnja kontejnerskih slika
+#   3) scan        - Trivy skeniranje (QUALITY GATE: HIGH/CRITICAL ruse build)
+#   4) push        - objava slika u GitHub Container Registry (samo na main/tag)
+# Tajne se NE hardkodiraju - koristi se ugradeni GITHUB_TOKEN.
+# =============================================================================
+
+name: ci-cd
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  # Ime slike se racuna u koraku "meta" (owner mora biti lowercase za ghcr).
+
+permissions:
+  contents: read
+  packages: write          # za push u ghcr
+  security-events: write   # za upload SARIF nalaza u Security tab
+
+jobs:
+  # ----------------------------------------------------------------- 1) TEST
+  test:
+    name: Lint & test (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, frontend, worker]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps
+        working-directory: ${{ matrix.service }}
+        run: npm install
+      - name: Syntax check (node --check)
+        working-directory: ${{ matrix.service }}
+        run: |
+          for f in $(find src -name "*.js"); do
+            echo "Checking $f"; node --check "$f";
+          done
+      - name: npm audit (high)
+        working-directory: ${{ matrix.service }}
+        run: npm audit --audit-level=high || true   # informativno, ne rusi build
+
+  # --------------------------------------------------------- 2) BUILD + SCAN
+  build-scan:
+    name: Build & Trivy scan (${{ matrix.service }})
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, frontend, worker]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Reproducibilan tag: kratki git SHA. Owner se spusta u lowercase (ghcr zahtjev).
+      - name: Compute image name & tag
+        id: meta
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "image=ghcr.io/${owner}/ticketing-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build image (load locally for scan)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          target: runtime
+          load: true
+          tags: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+
+      # ---- QUALITY GATE: Trivy ruse pipeline na HIGH/CRITICAL ranjivosti ----
+      - name: Trivy vulnerability scan (gate)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+          format: table
+          exit-code: "1"                 # <-- gate: 1 = padni ako ima nalaza
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true           # ignoriraj ono za sto jos nema fixa
+
+      # SARIF izvjestaj (i kad gate padne) -> GitHub Security tab
+      - name: Trivy scan (SARIF report)
+        if: always()
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          severity: HIGH,CRITICAL
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}
+
+  # --------------------------------------------------------------- 3) PUSH
+  push:
+    name: Push images (${{ matrix.service }})
+    needs: build-scan          # push tek NAKON sto skeniranje prode (gate)
+    if: github.event_name == 'push'   # ne pushaj na PR-ovima
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, frontend, worker]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute image name & tags
+        id: meta
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "image=ghcr.io/${owner}/ticketing-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+          echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "ver=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ver=main" >> "$GITHUB_OUTPUT"
+          fi
+      # Tagging politika: uvijek :<git-sha> (nepromjenjiv) + :main ili :<verzija>
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          target: runtime
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha }}
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.ver }}

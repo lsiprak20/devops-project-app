@@ -1,0 +1,85 @@
+# PostgreSQL - perzistentna baza (PVC), probe, resursi, non-root
+# Autor: Lovro Siprak
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: ticketing
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ticketing
+  labels: { app: postgres }
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # baza ima jedan PVC (RWO) -> ne smije rolling 2 poda
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      serviceAccountName: ticketing-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999          # 'postgres' korisnik u sluzbenoj slici
+        fsGroup: 999            # da pod moze pisati u PVC
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - configMapRef: { name: ticketing-config }
+            - secretRef: { name: ticketing-secret }
+          env:
+            # Sluzbena slika ocekuje bas ova imena varijabli:
+            - { name: POSTGRES_DB,       valueFrom: { configMapKeyRef: { name: ticketing-config, key: POSTGRES_DB } } }
+            - { name: POSTGRES_USER,     valueFrom: { secretKeyRef:    { name: ticketing-secret, key: POSTGRES_USER } } }
+            - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef:    { name: ticketing-secret, key: POSTGRES_PASSWORD } } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          readinessProbe:
+            exec: { command: ["sh","-c","pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["sh","-c","pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"] }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "256Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: postgres-pvc }
+        - name: init
+          configMap: { name: postgres-init }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: ticketing
+spec:
+  selector: { app: postgres }
+  ports:
+    - port: 5432
+      targetPort: 5432

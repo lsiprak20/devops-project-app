@@ -1,0 +1,12 @@
+Secure Event Ticketing Platform je instaliran (Helm release: {{ .Release.Name }}).
+
+Provjeri status:
+  kubectl get pods -n {{ .Release.Namespace }}
+
+Dodaj u hosts datoteku:
+  127.0.0.1  {{ .Values.ingress.host }}
+
+Otvori u pregledniku:
+  http://{{ .Values.ingress.host }}
+
+Autor: Lovro Siprak

@@ -1,0 +1,20 @@
+# Tajne i lokalna konfiguracija
+.env
+*.env
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+.npm
+
+# Build / scan artefakti
+*.log
+trivy-results/
+*.sarif
+
+# OS / editor smece
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

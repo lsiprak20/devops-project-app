@@ -1,0 +1,84 @@
+# NetworkPolicy - mrezna segmentacija (least-privilege promet, zahtjev I6).
+# NAPOMENA: policy provodi CNI plugin (Calico/Cilium). Docker Desktop default
+# CNI ih cesto NE provodi - tada su deklarativno tocne ali bez efekta. Na
+# minikube koristi: minikube start --cni=calico.
+# Autor: Lovro Siprak
+---
+# 1) Default DENY za sav ulazni promet u namespaceu
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ticketing
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+# 2) Postgres prima SAMO od api i worker poda
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-postgres
+  namespace: ticketing
+spec:
+  podSelector:
+    matchLabels: { app: postgres }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: api } }
+        - podSelector: { matchLabels: { app: worker } }
+      ports:
+        - { protocol: TCP, port: 5432 }
+---
+# 3) Redis prima SAMO od api i worker poda
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-redis
+  namespace: ticketing
+spec:
+  podSelector:
+    matchLabels: { app: redis }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: api } }
+        - podSelector: { matchLabels: { app: worker } }
+      ports:
+        - { protocol: TCP, port: 6379 }
+---
+# 4) API prima od frontend poda i od ingress-nginx kontrolera
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-api
+  namespace: ticketing
+spec:
+  podSelector:
+    matchLabels: { app: api }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: frontend } }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+      ports:
+        - { protocol: TCP, port: 8080 }
+---
+# 5) Frontend prima od ingress-nginx kontrolera
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-frontend
+  namespace: ticketing
+spec:
+  podSelector:
+    matchLabels: { app: frontend }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+      ports:
+        - { protocol: TCP, port: 3000 }

@@ -1,0 +1,8 @@
+apiVersion: v2
+name: secure-event-ticketing
+description: Helm chart za Secure Event Ticketing Platform (DevSecOps projekt)
+type: application
+version: 1.0.0          # verzija charta
+appVersion: "1.0.0"     # verzija aplikacije
+maintainers:
+  - name: Lovro Siprak

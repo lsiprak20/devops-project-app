@@ -1,0 +1,36 @@
+# RBAC - least privilege (zahtjev I6).
+# Svaki workload dobiva vlastiti ServiceAccount BEZ automatskog mountanja tokena.
+# Aplikacija ne treba pricati s Kubernetes API-jem, pa joj ne dajemo nikakva prava.
+# Autor: Lovro Siprak
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ticketing-sa
+  namespace: ticketing
+automountServiceAccountToken: false
+---
+# Minimalna Role: dopusta SAMO citanje vlastitih ConfigMapa (demonstracija RBAC-a).
+# Namjerno NEMA write prava niti pristupa Secretima preko API-ja.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ticketing-config-reader
+  namespace: ticketing
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ticketing-config-reader-binding
+  namespace: ticketing
+subjects:
+  - kind: ServiceAccount
+    name: ticketing-sa
+    namespace: ticketing
+roleRef:
+  kind: Role
+  name: ticketing-config-reader
+  apiGroup: rbac.authorization.k8s.io

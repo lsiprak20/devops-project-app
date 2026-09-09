@@ -1,0 +1,73 @@
+# API servis - 2 replike, rolling update, probe, resursi, hardened security
+# Autor: Lovro Siprak
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: ticketing
+  labels: { app: api }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0     # nula downtime-a tijekom updatea
+      maxSurge: 1
+  selector:
+    matchLabels: { app: api }
+  template:
+    metadata:
+      labels: { app: api }
+    spec:
+      serviceAccountName: ticketing-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: api
+          # ZAMIJENI <OWNER> svojim GitHub korisnickim imenom (ghcr.io registry).
+          # Za lokalni cluster (minikube/kind/Docker Desktop) build lokalno i
+          # ostavi imagePullPolicy: IfNotPresent.
+          image: ghcr.io/<OWNER>/ticketing-api:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef: { name: ticketing-config }
+          env:
+            - { name: POSTGRES_USER,     valueFrom: { secretKeyRef: { name: ticketing-secret, key: POSTGRES_USER } } }
+            - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: ticketing-secret, key: POSTGRES_PASSWORD } } }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8080 }   # spreman tek kad baza+redis rade
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }  # proces ziv
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits:   { cpu: "300m", memory: "192Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: ticketing
+spec:
+  selector: { app: api }
+  ports:
+    - port: 8080
+      targetPort: 8080

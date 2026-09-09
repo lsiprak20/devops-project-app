@@ -20,9 +20,15 @@ FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Sigurnosni "housekeeping": tini za ispravno rukovanje signalima (SIGTERM),
-# wget vec postoji u alpine busyboxu i koristimo ga za HEALTHCHECK.
-RUN apk add --no-cache tini
+# Sigurnosni "housekeeping": prvo nadogradnja svih OS paketa na zadnje zakrpane
+# verzije (uklanja poznate ranjivosti baze -> Trivy gate u CI-u prolazi), zatim
+# tini za ispravno rukovanje signalima (SIGTERM). wget vec postoji u busyboxu i
+# koristimo ga za HEALTHCHECK.
+RUN apk --no-cache upgrade && apk add --no-cache tini
+
+# npm ne treba za pokretanje (koristimo "node src/server.js"); micanjem npm-a iz
+# runtime slike smanjujemo napadnu povrsinu i uklanjamo ranjivosti npm ovisnosti.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Kopiramo gotove node_modules iz deps stagea i izvorni kod aplikacije
 COPY --from=deps /app/node_modules ./node_modules
@@ -48,7 +54,7 @@ CMD ["node", "src/server.js"]
 FROM node:20-alpine AS dev
 ENV NODE_ENV=development
 WORKDIR /app
-RUN apk add --no-cache tini
+RUN apk --no-cache upgrade && apk add --no-cache tini
 COPY package*.json ./
 RUN npm install
 COPY src ./src

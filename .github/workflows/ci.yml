@@ -88,7 +88,7 @@ jobs:
 
       # ---- QUALITY GATE: Trivy ruse pipeline na HIGH/CRITICAL ranjivosti ----
       - name: Trivy vulnerability scan (gate)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
           format: table
@@ -99,7 +99,7 @@ jobs:
       # SARIF izvjestaj (i kad gate padne) -> GitHub Security tab
       - name: Trivy scan (SARIF report)
         if: always()
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
           format: sarif

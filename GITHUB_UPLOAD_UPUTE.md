@@ -30,7 +30,7 @@ alternative.
 ### A2. Dodaj projekt kao repozitorij
 1. U GitHub Desktopu: **File → Add local repository…**
 2. Klikni **Choose…** i odaberi mapu:
-   `C:\Users\Lovro\Claude\Projects\DevOps\secure-event-ticketing`
+   `C:\Users\Lovro\Projects\secure-event-ticketing`
 3. Pojavit će se poruka *"This directory does not appear to be a Git repository"*
    s ponudom **„create a repository"** – klikni na tu plavu poveznicu.
 4. Otvori se prozor **Create a repository**:
@@ -83,7 +83,7 @@ Svaki put kad promijeniš datoteke: upiši novi **Summary** → **Commit to main
 Otvori PowerShell u mapi projekta i pokreni redom (zamijeni `<USERNAME>`):
 
 ```powershell
-cd C:\Users\Lovro\Claude\Projects\DevOps\secure-event-ticketing
+cd C:\Users\Lovro\Projects\secure-event-ticketing
 git init
 git add .
 git commit -m "Inicijalni commit - Lovro Siprak"

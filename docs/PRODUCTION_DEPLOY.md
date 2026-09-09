@@ -3,8 +3,7 @@
 **Autor: Lovro Siprak**
 
 Pokriva ishod učenja **I6** (orkestracija, probe/resursi, Ingress, secrets/RBAC/
-NetworkPolicy, rolling update i rollback). Ovdje su tehnički detalji; za vodič
-"od nule" namijenjen početniku vidi `../DEPLOY_UPUTE_KORAK_PO_KORAK.md`.
+NetworkPolicy, rolling update i rollback).
 
 ## 1. Preduvjeti
 

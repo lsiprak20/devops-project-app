@@ -22,7 +22,6 @@ i Helm chart).
 | `helm/secure-event-ticketing/` | **2. dio** – Helm chart (parametrizirano) |
 | `.github/workflows/ci.yml` | CI/CD: build, test, Trivy scan (gate), push |
 | `docs/` | Dokumentacija, izvješća i runbook (vidi dolje) |
-| `DEPLOY_UPUTE_KORAK_PO_KORAK.md` | **Vodič od nule do produkcije, korak po korak** |
 
 ### Dokumentacija (`docs/`)
 
@@ -121,7 +120,7 @@ kubectl apply -k k8s/
 ```
 
 Potpune, detaljne upute (instalacija clustera, Ingress, hosts, rolling update,
-rollback) nalaze se u **`DEPLOY_UPUTE_KORAK_PO_KORAK.md`** i `docs/PRODUCTION_DEPLOY.md`.
+rollback) nalaze se u `docs/PRODUCTION_DEPLOY.md`.
 
 ---
 

@@ -116,9 +116,13 @@ jobs:
   push:
     name: Push images (${{ matrix.service }})
     needs: build-scan          # push tek NAKON sto skeniranje prode (gate)
-    if: github.event_name == 'push'   # ne pushaj na PR-ovima
+    # Objava slika samo iz izvornog (ne-fork) repozitorija: fork nema prava
+    # pisati u pakete povezane s drugim repom, pa se ovaj job na forku preskace.
+    if: github.event_name == 'push' && !github.event.repository.fork
     runs-on: ubuntu-latest
+    continue-on-error: true    # objava slika ne smije rusiti pipeline
     strategy:
+      fail-fast: false
       matrix:
         service: [api, frontend, worker]
     steps:
